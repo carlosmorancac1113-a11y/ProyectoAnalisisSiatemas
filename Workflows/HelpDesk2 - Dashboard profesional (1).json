@@ -1,0 +1,202 @@
+{
+  "name": "HelpDesk2 - Dashboard profesional",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "dashboard",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        800,
+        -16
+      ],
+      "id": "dff6a25d-42d7-4c88-bdb7-4e9a1ebd23cc",
+      "name": "Webhook",
+      "webhookId": "e70fe749-5a99-4556-b332-d640461a3f4a"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, nombre, correo, problema, estado, fecha, prioridad, solucion, fecha_resolucion FROM tickets ORDER BY CASE prioridad WHEN 'Alta' THEN 1 WHEN 'Media' THEN 2 WHEN 'Baja' THEN 3 ELSE 4 END, fecha DESC;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        1104,
+        0
+      ],
+      "id": "834c02ce-43d8-4094-a2d8-5931f02af27b",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "mySql": {
+          "id": "zPDRKa5Ca9cnYQns",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "dash-id",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "dash-nombre",
+              "name": "nombre",
+              "value": "={{ $json.nombre }}",
+              "type": "string"
+            },
+            {
+              "id": "dash-correo",
+              "name": "correo",
+              "value": "={{ $json.correo }}",
+              "type": "string"
+            },
+            {
+              "id": "dash-problema",
+              "name": "problema",
+              "value": "={{ $json.problema }}",
+              "type": "string"
+            },
+            {
+              "id": "dash-estado",
+              "name": "estado",
+              "value": "={{ $json.estado }}",
+              "type": "string"
+            },
+            {
+              "id": "dash-fecha",
+              "name": "fecha",
+              "value": "={{ $json.fecha }}",
+              "type": "string"
+            },
+            {
+              "id": "dash-prioridad",
+              "name": "prioridad",
+              "value": "={{ $json.prioridad || \"Baja\" }}",
+              "type": "string"
+            },
+            {
+              "id": "dash-solucion",
+              "name": "solucion",
+              "value": "={{ $json.solucion || \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "dash-fecha-resolucion",
+              "name": "fecha_resolucion",
+              "value": "={{ $json.fecha_resolucion || \"\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1312,
+        0
+      ],
+      "id": "12779092-70eb-4120-9d56-687c22d52935",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = items.map((item) => item.json);\n\nfunction esc(value) {\n  return String(value ?? '')\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;')\n    .replace(/'/g, '&#39;');\n}\n\nfunction norm(value) {\n  return String(value || '').toLowerCase();\n}\n\nconst total = rows.length;\nconst pendientes = rows.filter((r) => norm(r.estado).includes('pendiente')).length;\nconst proceso = rows.filter((r) => norm(r.estado).includes('proceso')).length;\nconst terminados = rows.filter((r) => norm(r.estado).includes('terminado') || norm(r.estado).includes('resuelto')).length;\nconst altas = rows.filter((r) => norm(r.prioridad) === 'alta').length;\n\nconst reportDate = new Date().toLocaleString('es-GT', { dateStyle: 'medium', timeStyle: 'short' });\nconst reportRowsJson = JSON.stringify(rows).replace(/</g, '\\\\u003c');\n\nconst tableRows = rows.map((row) => {\n  const estado = row.estado || 'Sin estado';\n  const estadoKey = norm(estado).includes('pendiente') ? 'pendiente'\n    : norm(estado).includes('proceso') ? 'proceso'\n    : (norm(estado).includes('terminado') || norm(estado).includes('resuelto')) ? 'terminado'\n    : norm(estado).includes('rechazado') ? 'rechazado'\n    : 'sinestado';\n  const prioridad = row.prioridad || 'Baja';\n  const prioridadKey = norm(prioridad) === 'alta' ? 'alta' : norm(prioridad) === 'media' ? 'media' : 'baja';\n  const tecnicoOptions = [1, 2, 3, 4].map((num) => `<option value=\"Tecnico ${num}\">Tecnico ${num}</option>`).join('');\n  const technicianControl = estadoKey === 'terminado'\n    ? `<span class=\"technician-label\" data-tech-label=\"${esc(row.id)}\">Sin asignar</span>`\n    : `<select class=\"tech-select\" data-tech-select=\"${esc(row.id)}\" onchange=\"saveTechnician('${esc(row.id)}', this.value)\">${tecnicoOptions}</select>`;\n  const actionButtons = estadoKey === 'pendiente'\n    ? `<button type=\"button\" class=\"btn primary\" onclick=\"takeTicket('${esc(row.id)}')\">Pasar a proceso</button>`\n    : estadoKey === 'proceso'\n      ? `<button type=\"button\" class=\"btn primary\" onclick=\"openModal('${esc(row.id)}')\">Cerrar ticket</button>`\n      : estadoKey === 'terminado'\n        ? `<span class=\"muted\">Cerrado</span>`\n        : `<span class=\"muted\">No disponible</span>`;\n\n  return `<tr data-status=\"${estadoKey}\" data-priority=\"${prioridadKey}\" data-search=\"${esc(`${row.id} ${row.nombre} ${row.correo} ${row.problema} ${estado} ${prioridad}`).toLowerCase()}\">\n    <td class=\"mono\">#${esc(row.id)}</td>\n    <td>\n      <strong>${esc(row.nombre)}</strong>\n      <span>${esc(row.correo)}</span>\n    </td>\n    <td class=\"issue\">${esc(row.problema)}</td>\n    <td><span class=\"pill priority ${prioridadKey}\">${esc(prioridad)}</span></td>\n    <td><span class=\"pill status ${estadoKey}\">${esc(estado)}</span></td>\n    <td>${esc(row.fecha || '')}</td>\n    <td>${technicianControl}</td>\n    <td class=\"solution\">${esc(row.solucion || '')}</td>\n    <td class=\"actions\">\n      ${actionButtons}\n      <button type=\"button\" class=\"btn\" onclick=\"printTicket('${esc(row.id)}')\">Reporte PDF</button>\n    </td>\n  </tr>`;\n}).join('');\n\nlet html = `<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>Help Desk - Dashboard</title>\n  <style>\n    :root {\n      --bg: #f4f7fb;\n      --panel: #ffffff;\n      --line: #d8e0ea;\n      --text: #172033;\n      --muted: #667085;\n      --brand: #0f766e;\n      --brand-dark: #115e59;\n      --danger: #b42318;\n      --warn: #b54708;\n      --ok: #067647;\n      --info: #175cd3;\n    }\n    * { box-sizing: border-box; }\n    body {\n      margin: 0;\n      background: var(--bg);\n      color: var(--text);\n      font-family: \"Segoe UI\", Arial, sans-serif;\n      font-size: 14px;\n    }\n    header {\n      background: #ffffff;\n      border-bottom: 1px solid var(--line);\n      padding: 22px 28px;\n    }\n    .topbar, main { max-width: 1320px; margin: 0 auto; }\n    .topbar {\n      display: flex;\n      align-items: center;\n      justify-content: space-between;\n      gap: 16px;\n    }\n    h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: 0; }\n    .subtitle { margin: 5px 0 0; color: var(--muted); }\n    main { padding: 24px 28px 40px; }\n    .toolbar {\n      display: grid;\n      grid-template-columns: 1fr auto auto auto;\n      gap: 10px;\n      align-items: center;\n      margin-bottom: 18px;\n    }\n    input, select, textarea {\n      border: 1px solid var(--line);\n      border-radius: 6px;\n      padding: 10px 12px;\n      font: inherit;\n      background: #fff;\n      color: var(--text);\n    }\n    .tech-select { min-width: 118px; padding: 8px 10px; }\n    .technician-label { color: var(--muted); font-weight: 700; }\n    .btn {\n      border: 0;\n      border-radius: 6px;\n      padding: 10px 14px;\n      font-weight: 700;\n      cursor: pointer;\n      background: #e6edf5;\n      color: var(--text);\n      white-space: nowrap;\n    }\n    .btn.primary { background: var(--brand); color: #fff; }\n    .btn.primary:hover { background: var(--brand-dark); }\n    .btn:disabled { opacity: .55; cursor: not-allowed; }\n    .metrics {\n      display: grid;\n      grid-template-columns: repeat(5, minmax(0, 1fr));\n      gap: 12px;\n      margin-bottom: 18px;\n    }\n    .metric {\n      background: var(--panel);\n      border: 1px solid var(--line);\n      border-radius: 8px;\n      padding: 14px;\n    }\n    .metric span { display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; font-weight: 700; }\n    .metric strong { display: block; margin-top: 6px; font-size: 26px; }\n    .table-wrap {\n      overflow: auto;\n      background: var(--panel);\n      border: 1px solid var(--line);\n      border-radius: 8px;\n    }\n    table { width: 100%; border-collapse: collapse; min-width: 1220px; }\n    th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }\n    th { background: #eef3f8; font-size: 12px; color: #344054; text-transform: uppercase; }\n    tr:hover td { background: #f8fafc; }\n    td strong, td span { display: block; }\n    .mono { font-family: Consolas, monospace; font-weight: 700; }\n    .issue { max-width: 330px; line-height: 1.35; }\n    .solution { max-width: 250px; color: var(--muted); }\n    .actions { min-width: 220px; }\n    .actions .btn { margin: 0 6px 6px 0; }\n    .muted { color: var(--muted); font-size: 12px; }\n    .pill {\n      display: inline-block;\n      border-radius: 999px;\n      padding: 5px 9px;\n      font-size: 12px;\n      font-weight: 800;\n      line-height: 1;\n      white-space: nowrap;\n    }\n    .priority.alta { background: #fee4e2; color: var(--danger); }\n    .priority.media { background: #fef0c7; color: var(--warn); }\n    .priority.baja { background: #dcfae6; color: var(--ok); }\n    .status.pendiente { background: #e4e7ec; color: #344054; }\n    .status.proceso { background: #d1e9ff; color: var(--info); }\n    .status.terminado { background: #dcfae6; color: var(--ok); }\n    .status.rechazado { background: #fee4e2; color: var(--danger); }\n    .status.sinestado { background: #f2f4f7; color: #475467; }\n    .modal {\n      display: none;\n      position: fixed;\n      inset: 0;\n      background: rgba(16, 24, 40, .62);\n      align-items: center;\n      justify-content: center;\n      padding: 20px;\n    }\n    .modal.open { display: flex; }\n    .modal-content {\n      width: min(520px, 100%);\n      background: #fff;\n      border-radius: 8px;\n      padding: 22px;\n      box-shadow: 0 20px 45px rgba(16, 24, 40, .25);\n    }\n    .modal-content h2 { margin: 0 0 8px; font-size: 20px; }\n    textarea { width: 100%; min-height: 130px; resize: vertical; margin: 10px 0; }\n    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }\n    .report-only { display: none; }\n\n    .print-report { display: none; }\n    @media print {\n      body { background: #fff; }\n      body > header, body > main, .modal { display: none !important; }\n      .print-report.ready {\n        display: block;\n        color: #172033;\n        font-family: \"Segoe UI\", Arial, sans-serif;\n        margin: 22px;\n        line-height: 1.45;\n      }\n      .report-header { border-bottom: 3px solid #0f766e; padding-bottom: 14px; margin-bottom: 22px; }\n      .report-header h1 { font-size: 24px; margin: 0 0 6px; }\n      .report-meta { color: #667085; font-size: 12px; }\n      .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }\n      .report-box { border: 1px solid #d8e0ea; border-radius: 6px; padding: 12px; }\n      .report-label { display: block; color: #667085; font-size: 11px; text-transform: uppercase; font-weight: 800; margin-bottom: 4px; }\n      .report-title { font-size: 16px; margin: 22px 0 8px; color: #115e59; }\n      .report-block { border: 1px solid #d8e0ea; border-radius: 6px; padding: 14px; min-height: 80px; white-space: pre-wrap; }\n      .report-footer { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 50px; }\n      .report-sign { border-top: 1px solid #667085; padding-top: 8px; text-align: center; color: #667085; }\n    }\n    @media (max-width: 900px) {\n      .topbar, .toolbar { grid-template-columns: 1fr; display: grid; }\n      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }\n    }\n  </style>\n</head>\n<body>\n  <header>\n    <div class=\"topbar\">\n      <div>\n        <h1>Dashboard Help Desk</h1>\n        <p class=\"subtitle\">Gestion de tickets, prioridad, asignacion visual y cierre tecnico</p>\n      </div>\n      <button class=\"btn primary\" onclick=\"location.reload()\">Actualizar</button>\n    </div>\n  </header>\n  <main>\n    <section class=\"report-only\">\n      <h2>Reporte tecnico de tickets</h2>\n      <p>Generado: ${esc(reportDate)}</p>\n    </section>\n    <section class=\"metrics\">\n      <div class=\"metric\"><span>Total</span><strong>${total}</strong></div>\n      <div class=\"metric\"><span>Pendientes</span><strong>${pendientes}</strong></div>\n      <div class=\"metric\"><span>En proceso</span><strong>${proceso}</strong></div>\n      <div class=\"metric\"><span>Terminados</span><strong>${terminados}</strong></div>\n      <div class=\"metric\"><span>Alta prioridad</span><strong>${altas}</strong></div>\n    </section>\n    <section class=\"toolbar\">\n      <input id=\"search\" placeholder=\"Buscar por ID, usuario, correo o problema\" oninput=\"filterRows()\">\n      <select id=\"statusFilter\" onchange=\"filterRows()\">\n        <option value=\"\">Todos los estados</option>\n        <option value=\"pendiente\">Pendiente</option>\n        <option value=\"proceso\">En proceso</option>\n        <option value=\"terminado\">Terminado</option>\n        <option value=\"rechazado\">Rechazado</option>\n      </select>\n      <select id=\"priorityFilter\" onchange=\"filterRows()\">\n        <option value=\"\">Todas las prioridades</option>\n        <option value=\"alta\">Alta</option>\n        <option value=\"media\">Media</option>\n        <option value=\"baja\">Baja</option>\n      </select>\n      <button class=\"btn\" onclick=\"resetFilters()\">Limpiar</button>\n    </section>\n    <section class=\"table-wrap\">\n      <table>\n        <thead>\n          <tr>\n            <th>ID</th>\n            <th>Solicitante</th>\n            <th>Problema</th>\n            <th>Prioridad</th>\n            <th>Estado</th>\n            <th>Fecha</th>\n            <th>Tecnico</th>\n            <th>Solucion</th>\n            <th class=\"actions\">Accion</th>\n          </tr>\n        </thead>\n        <tbody id=\"ticketRows\">${tableRows || '<tr><td colspan=\"9\">No hay tickets registrados.</td></tr>'}</tbody>\n      </table>\n    </section>\n  </main>\n\n  <div id=\"modal\" class=\"modal\" role=\"dialog\" aria-modal=\"true\">\n    <div class=\"modal-content\">\n      <h2>Cerrar ticket</h2>\n      <p id=\"ticketLabel\" class=\"muted\"></p>\n      <textarea id=\"solucion\" placeholder=\"Describe la causa, acciones realizadas y resultado final\"></textarea>\n      <div class=\"modal-actions\">\n        <button class=\"btn\" onclick=\"closeModal()\">Cancelar</button>\n        <button class=\"btn primary\" onclick=\"sendResolution()\">Guardar solucion</button>\n      </div>\n    </div>\n  </div>\n\n  <section id=\"printReport\" class=\"print-report\" aria-hidden=\"true\"></section>\n\n  <script>\n    let currentTicket = null;\n    const ticketsForReport = ${reportRowsJson};\n    const technicianKey = 'helpdeskTechnicians';\n\n    function webhookBase() {\n      return '/webhook/';\n    }\n\n    function loadTechnicians() {\n      try {\n        return JSON.parse(localStorage.getItem(technicianKey) || '{}');\n      } catch (error) {\n        return {};\n      }\n    }\n\n    function getTechnician(id) {\n      return loadTechnicians()[id] || 'Tecnico 1';\n    }\n\n    function saveTechnician(id, value) {\n      const technicians = loadTechnicians();\n      technicians[id] = value || 'Tecnico 1';\n      localStorage.setItem(technicianKey, JSON.stringify(technicians));\n      applyTechnicians();\n    }\n\n    function applyTechnicians() {\n      const technicians = loadTechnicians();\n      document.querySelectorAll('[data-tech-select]').forEach((select) => {\n        const id = select.dataset.techSelect;\n        select.value = technicians[id] || select.value || 'Tecnico 1';\n      });\n      document.querySelectorAll('[data-tech-label]').forEach((label) => {\n        const id = label.dataset.techLabel;\n        label.textContent = technicians[id] || 'Sin asignar';\n      });\n    }\n\n    function openModal(id) {\n      currentTicket = id;\n      document.getElementById('ticketLabel').textContent = 'Ticket #' + id + ' - ' + getTechnician(id);\n      document.getElementById('solucion').value = '';\n      document.getElementById('modal').classList.add('open');\n      document.getElementById('solucion').focus();\n    }\n\n    function closeModal() {\n      document.getElementById('modal').classList.remove('open');\n    }\n\n    function filterRows() {\n      const search = document.getElementById('search').value.trim().toLowerCase();\n      const status = document.getElementById('statusFilter').value;\n      const priority = document.getElementById('priorityFilter').value;\n\n      document.querySelectorAll('#ticketRows tr').forEach((row) => {\n        const matchesSearch = !search || row.dataset.search.includes(search);\n        const matchesStatus = !status || row.dataset.status === status;\n        const matchesPriority = !priority || row.dataset.priority === priority;\n        row.style.display = matchesSearch && matchesStatus && matchesPriority ? '' : 'none';\n      });\n    }\n\n    function resetFilters() {\n      document.getElementById('search').value = '';\n      document.getElementById('statusFilter').value = '';\n      document.getElementById('priorityFilter').value = '';\n      filterRows();\n    }\n\n    async function takeTicket(id) {\n      const technician = getTechnician(id);\n      const response = await fetch(webhookBase() + 'tomar-ticket?id=' + encodeURIComponent(id), { method: 'GET' });\n      if (!response.ok) {\n        alert('No se pudo pasar el ticket a En proceso. Verifica que el workflow de procesamiento este activo.');\n        return;\n      }\n      saveTechnician(id, technician);\n      location.reload();\n    }\n\n    async function sendResolution() {\n      const solucion = document.getElementById('solucion').value.trim();\n      if (solucion.length < 10) {\n        alert('Escribe una descripcion de al menos 10 caracteres.');\n        return;\n      }\n\n      const url = webhookBase() + 'cerrar-ticket?id=' + encodeURIComponent(currentTicket) + '&solucion=' + encodeURIComponent(solucion);\n      const response = await fetch(url, { method: 'GET' });\n      if (!response.ok) {\n        alert('No se pudo actualizar el ticket.');\n        return;\n      }\n      closeModal();\n      location.reload();\n    }\n\n    function safe(value) {\n      return String(value || '')\n        .replace(/&/g, '&amp;')\n        .replace(/</g, '&lt;')\n        .replace(/>/g, '&gt;')\n        .replace(/\"/g, '&quot;')\n        .replace(/'/g, '&#39;');\n    }\n\n    function formatDate(value) {\n      return value ? safe(value) : 'No registrado';\n    }\n\n    function printTicket(id) {\n      const ticket = ticketsForReport.find((item) => String(item.id) === String(id));\n      if (!ticket) {\n        alert('No se encontro el ticket seleccionado.');\n        return;\n      }\n\n      const technician = getTechnician(id);\n      const generatedAt = new Date().toLocaleString('es-GT', { dateStyle: 'medium', timeStyle: 'short' });\n      const report = document.getElementById('printReport');\n      if (!report) {\n        alert('No se encontro el contenedor del reporte. Actualiza el dashboard e intenta de nuevo.');\n        return;\n      }\n\n      report.innerHTML =\n        '<div class=\"report-header\"><h1>Reporte tecnico de ticket #' + safe(ticket.id) + '</h1><div class=\"report-meta\">Generado: ' + safe(generatedAt) + '</div></div>' +\n        '<section class=\"report-grid\">' +\n        '<div class=\"report-box\"><span class=\"report-label\">Solicitante</span><strong>' + safe(ticket.nombre) + '</strong><br>' + safe(ticket.correo) + '</div>' +\n        '<div class=\"report-box\"><span class=\"report-label\">Estado</span><strong>' + safe(ticket.estado || 'Sin estado') + '</strong></div>' +\n        '<div class=\"report-box\"><span class=\"report-label\">Tecnico asignado</span><strong>' + safe(technician) + '</strong></div>' +\n        '<div class=\"report-box\"><span class=\"report-label\">Prioridad</span><strong>' + safe(ticket.prioridad || 'Baja') + '</strong></div>' +\n        '<div class=\"report-box\"><span class=\"report-label\">Fecha de apertura</span>' + formatDate(ticket.fecha) + '</div>' +\n        '<div class=\"report-box\"><span class=\"report-label\">Fecha de cierre</span>' + formatDate(ticket.fecha_resolucion) + '</div>' +\n        '</section>' +\n        '<h2 class=\"report-title\">Problema reportado</h2><div class=\"report-block\">' + safe(ticket.problema || 'Sin descripcion') + '</div>' +\n        '<h2 class=\"report-title\">Solucion tecnica aplicada</h2><div class=\"report-block\">' + safe(ticket.solucion || 'Pendiente de documentar') + '</div>' +\n        '<h2 class=\"report-title\">Observaciones</h2><div class=\"report-block\">Validar con el usuario que el servicio funciona correctamente y documentar cualquier seguimiento requerido.</div>' +\n        '<section class=\"report-footer\"><div class=\"report-sign\">Tecnico responsable</div><div class=\"report-sign\">Vo. Bo. / Revision</div></section>';\n\n      report.classList.add('ready');\n      report.setAttribute('aria-hidden', 'false');\n      setTimeout(() => window.print(), 100);\n    }\n\n    window.addEventListener('afterprint', () => {\n      const report = document.getElementById('printReport');\n      if (report) {\n        report.classList.remove('ready');\n        report.setAttribute('aria-hidden', 'true');\n      }\n    });\n\n    window.addEventListener('keydown', (event) => {\n      if (event.key === 'Escape') closeModal();\n    });\n\n    applyTechnicians();\n  </script>\n</body>\n</html>`;\n\nreturn [{ json: { html } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        0
+      ],
+      "id": "e989bd03-96e7-46a2-a79d-5b287931fb9c",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{$json[\"html\"]}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1728,
+        0
+      ],
+      "id": "7ff98eba-9da8-4879-88a0-c34703ab0115",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "34bcbd50-8ce8-4b34-b302-ebffd325814f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b02827de534b97c0f66b11997a66e662fec6fa056994bcca044c9990e9d512c1"
+  },
+  "id": "HhmGvXGp29VNfSBm",
+  "tags": []
+}

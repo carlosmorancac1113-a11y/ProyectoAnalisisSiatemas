@@ -1,0 +1,504 @@
+{
+  "name": "HelpDesk - Ingesta corregido",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "valid-nombre",
+              "leftValue": "={{ $json.body?.nombre }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "valid-correo",
+              "leftValue": "={{ $json.body?.correo }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "valid-problema",
+              "leftValue": "={{ $json.body?.problema }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        192,
+        -48
+      ],
+      "id": "898a0984-02e9-4509-9e85-6f293dc007f5",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "rej-error",
+              "name": "error",
+              "value": "Datos incompletos: nombre, correo y problema son obligatorios",
+              "type": "string"
+            },
+            {
+              "id": "rej-estado",
+              "name": "estado",
+              "value": "RECHAZADO",
+              "type": "string"
+            },
+            {
+              "id": "rej-prioridad",
+              "name": "prioridad",
+              "value": "Baja",
+              "type": "string"
+            },
+            {
+              "id": "rej-fecha",
+              "name": "fecha",
+              "value": "={{ $now }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {},
+        "includeOtherFields": false
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        416,
+        96
+      ],
+      "id": "3f716501-d780-4351-81e5-476938b6aa43",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "in-nombre",
+              "name": "nombre",
+              "value": "={{ $json.body.nombre.trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "in-correo",
+              "name": "correo",
+              "value": "={{ $json.body.correo.trim().toLowerCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "in-problema",
+              "name": "problema",
+              "value": "={{ $json.body.problema.trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "in-estado",
+              "name": "estado",
+              "value": "Pendiente",
+              "type": "string"
+            },
+            {
+              "id": "in-prioridad",
+              "name": "prioridad",
+              "value": "={{ (() => {\n  const text = String($json.body?.problema || '').toLowerCase();\n  const alta = /(urgente|critico|critica|caido|caida|no funciona|sin servicio|produccion|servidor|base de datos|seguridad|hack|virus|ransomware|pago|facturacion|error 500|bloqueado)/i;\n  const media = /(lento|intermitente|error|falla|fallo|no puedo|correo|impresora|acceso|login|contrasena|red|vpn|sistema)/i;\n  if (alta.test(text)) return 'Alta';\n  if (media.test(text)) return 'Media';\n  return 'Baja';\n})() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {},
+        "includeOtherFields": false
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        432,
+        -128
+      ],
+      "id": "d601de4b-3136-4caa-99ce-69a74f4abc8e",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "Ticket-submit",
+        "options": {},
+        "responseMode": "responseNode"
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -80,
+        -32
+      ],
+      "id": "cf7f0080-721c-4bc5-a92e-d448211c595f",
+      "name": "Recibe Formulario",
+      "webhookId": "dd5bc57c-44f3-4bd7-bf35-6c3e3d0a1ea2"
+    },
+    {
+      "parameters": {
+        "table": {
+          "__rl": true,
+          "value": "tickets",
+          "mode": "list",
+          "cachedResultName": "tickets"
+        },
+        "dataMode": "defineBelow",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "nombre",
+              "value": "ERROR"
+            },
+            {
+              "column": "correo",
+              "value": "ERROR"
+            },
+            {
+              "column": "problema",
+              "value": "={{ $json.error }}"
+            },
+            {
+              "column": "estado",
+              "value": "RECHAZADO"
+            },
+            {
+              "column": "prioridad",
+              "value": "={{ $json.prioridad }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        672,
+        96
+      ],
+      "id": "77dd6880-e0bd-43e8-b700-74de57b0180a",
+      "name": "Inserta RECHAZADO",
+      "credentials": {
+        "mySql": {
+          "id": "zPDRKa5Ca9cnYQns",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "table": {
+          "__rl": true,
+          "value": "tickets",
+          "mode": "list",
+          "cachedResultName": "tickets"
+        },
+        "dataMode": "defineBelow",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "nombre",
+              "value": "={{ $json.nombre }}"
+            },
+            {
+              "column": "correo",
+              "value": "={{ $json.correo }}"
+            },
+            {
+              "column": "problema",
+              "value": "={{ $json.problema }}"
+            },
+            {
+              "column": "estado",
+              "value": "={{ $json.estado }}"
+            },
+            {
+              "column": "prioridad",
+              "value": "={{ $json.prioridad }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        672,
+        -128
+      ],
+      "id": "d5ae5f0c-641e-4d96-816a-22b2cfc54862",
+      "name": "Inserta RECIBIDO",
+      "credentials": {
+        "mySql": {
+          "id": "zPDRKa5Ca9cnYQns",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $(\"Edit Fields1\").item.json.correo }}",
+        "subject": "=Ticket recibido - Help Desk #{{ $(\"Inserta RECIBIDO\").item.json.id || \"\" }}",
+        "message": "=<h2>Ticket recibido</h2>\n<p>Hola <strong>{{ $(\"Edit Fields1\").item.json.nombre }}</strong>,</p>\n<p>Hemos recibido tu solicitud correctamente.</p>\n<hr>\n<p><strong>Problema:</strong> {{ $(\"Edit Fields1\").item.json.problema }}</p>\n<p><strong>Prioridad asignada:</strong> {{ $(\"Edit Fields1\").item.json.prioridad }}</p>\n<p><strong>Estado:</strong> {{ $(\"Edit Fields1\").item.json.estado }}</p>\n<hr>\n<p>Un agente revisara tu caso pronto. Gracias por contactarnos.</p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        896,
+        -128
+      ],
+      "id": "9a44f007-ec26-444a-8b1b-1d6397637a81",
+      "name": "Envia GMAILTiket Recibido",
+      "webhookId": "2524fe66-cf31-46d4-ac44-162f3f3cd724",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Ao4Z1roSryvBtszD",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true, \"message\": \"Ticket registrado correctamente\" }",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        896,
+        -272
+      ],
+      "id": "9c49ca1f-3b33-41f7-9843-3a3556247c8a",
+      "name": "Respuesta Ticket Registrado"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": false, \"message\": \"Datos incompletos: nombre, correo y problema son obligatorios\" }",
+        "options": {
+          "responseCode": 400,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        896,
+        96
+      ],
+      "id": "35e4cd67-bcbc-44f8-97e3-70f2ba005a6f",
+      "name": "Respuesta Ticket Rechazado"
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "Ticket",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -80,
+        -448
+      ],
+      "id": "7e055ac7-c4d3-4e08-bc71-6f5df3911e20",
+      "name": "Formulario Ticket",
+      "webhookId": "2f2e08e7-0b58-4c45-9339-fb4bb7d1ed20"
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = `<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>Crear ticket - Help Desk</title>\n  <style>\n    :root {\n      --bg: #f4f7fb;\n      --panel: #ffffff;\n      --line: #d8e0ea;\n      --text: #172033;\n      --muted: #667085;\n      --brand: #0f766e;\n      --brand-dark: #115e59;\n      --danger: #b42318;\n      --ok: #067647;\n    }\n    * { box-sizing: border-box; }\n    body {\n      margin: 0;\n      min-height: 100vh;\n      background: var(--bg);\n      color: var(--text);\n      font-family: \"Segoe UI\", Arial, sans-serif;\n      display: grid;\n      place-items: center;\n      padding: 28px;\n    }\n    .shell {\n      width: min(940px, 100%);\n      display: grid;\n      grid-template-columns: .9fr 1.1fr;\n      background: var(--panel);\n      border: 1px solid var(--line);\n      border-radius: 8px;\n      overflow: hidden;\n      box-shadow: 0 18px 45px rgba(16, 24, 40, .10);\n    }\n    .info {\n      background: #123c3a;\n      color: #fff;\n      padding: 34px;\n      display: flex;\n      flex-direction: column;\n      justify-content: space-between;\n      gap: 28px;\n    }\n    .info h1 {\n      margin: 0 0 10px;\n      font-size: 30px;\n      line-height: 1.1;\n      letter-spacing: 0;\n    }\n    .info p { margin: 0; color: #d7efeb; line-height: 1.5; }\n    .steps {\n      display: grid;\n      gap: 12px;\n      margin-top: 24px;\n    }\n    .step {\n      border: 1px solid rgba(255,255,255,.22);\n      border-radius: 6px;\n      padding: 12px;\n      color: #eefaf8;\n      font-size: 13px;\n    }\n    form { padding: 34px; }\n    h2 { margin: 0 0 6px; font-size: 22px; }\n    .hint { margin: 0 0 22px; color: var(--muted); }\n    label { display: block; font-weight: 700; margin: 14px 0 7px; }\n    input, textarea {\n      width: 100%;\n      border: 1px solid var(--line);\n      border-radius: 6px;\n      padding: 11px 12px;\n      font: inherit;\n      color: var(--text);\n      background: #fff;\n    }\n    textarea { min-height: 150px; resize: vertical; line-height: 1.4; }\n    .actions {\n      display: flex;\n      align-items: center;\n      justify-content: space-between;\n      gap: 12px;\n      margin-top: 22px;\n    }\n    button {\n      border: 0;\n      border-radius: 6px;\n      padding: 11px 16px;\n      background: var(--brand);\n      color: #fff;\n      font-weight: 800;\n      cursor: pointer;\n    }\n    button:hover { background: var(--brand-dark); }\n    button:disabled { opacity: .65; cursor: wait; }\n    .status { font-weight: 700; font-size: 13px; color: var(--muted); }\n    .status.ok { color: var(--ok); }\n    .status.error { color: var(--danger); }\n    @media (max-width: 760px) {\n      body { padding: 16px; place-items: start center; }\n      .shell { grid-template-columns: 1fr; }\n      .info, form { padding: 24px; }\n    }\n  </style>\n</head>\n<body>\n  <main class=\"shell\">\n    <section class=\"info\">\n      <div>\n        <h1>Help Desk</h1>\n        <p>Registra tu solicitud de soporte con la informacion necesaria para que el equipo tecnico pueda priorizarla y atenderla.</p>\n        <div class=\"steps\">\n          <div class=\"step\"><strong>1.</strong> Describe el problema con claridad.</div>\n          <div class=\"step\"><strong>2.</strong> El sistema asigna prioridad automaticamente.</div>\n          <div class=\"step\"><strong>3.</strong> Recibiras confirmacion por correo.</div>\n        </div>\n      </div>\n      <p>Sistema de gestion de tickets</p>\n    </section>\n    <form id=\"ticketForm\">\n      <h2>Crear ticket</h2>\n      <p class=\"hint\">Los campos son obligatorios. No incluyas contrasenas ni informacion sensible.</p>\n\n      <label for=\"nombre\">Nombre completo</label>\n      <input id=\"nombre\" name=\"nombre\" autocomplete=\"name\" required>\n\n      <label for=\"correo\">Correo electronico</label>\n      <input id=\"correo\" name=\"correo\" type=\"email\" autocomplete=\"email\" required>\n\n      <label for=\"problema\">Descripcion del problema</label>\n      <textarea id=\"problema\" name=\"problema\" required placeholder=\"Ejemplo: No puedo ingresar al sistema, aparece error al iniciar sesion...\"></textarea>\n\n      <div class=\"actions\">\n        <span id=\"status\" class=\"status\">Listo para enviar</span>\n        <button id=\"sendButton\" type=\"submit\">Enviar ticket</button>\n      </div>\n    </form>\n  </main>\n\n  <script>\n    function webhookBase() {\n      return '/webhook/';\n    }\n\n    const form = document.getElementById('ticketForm');\n    const status = document.getElementById('status');\n    const button = document.getElementById('sendButton');\n\n    form.addEventListener('submit', async (event) => {\n      event.preventDefault();\n      button.disabled = true;\n      status.className = 'status';\n      status.textContent = 'Enviando ticket...';\n\n      const payload = {\n        nombre: form.nombre.value.trim(),\n        correo: form.correo.value.trim(),\n        problema: form.problema.value.trim()\n      };\n\n      try {\n        const response = await fetch(webhookBase() + 'Ticket-submit', {\n          method: 'POST',\n          headers: { 'Content-Type': 'application/json' },\n          body: JSON.stringify(payload)\n        });\n\n        const result = await response.json().catch(() => ({}));\n        if (!response.ok || result.success === false) throw new Error(result.message || 'No se pudo registrar');\n\n        form.reset();\n        status.className = 'status ok';\n        status.textContent = 'Ticket enviado correctamente. Revisa tu correo.';\n      } catch (error) {\n        status.className = 'status error';\n        status.textContent = error.message || 'No se pudo enviar el ticket. Verifica que el workflow este activo.';\n      } finally {\n        button.disabled = false;\n      }\n    });\n  </script>\n</body>\n</html>`;\n\nreturn [{ json: { html } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        -448
+      ],
+      "id": "4c40eebd-cbc1-4851-89d7-f53e612aa6b4",
+      "name": "HTML Formulario Ticket"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        432,
+        -448
+      ],
+      "id": "0248fc7e-a8cd-45c9-8e7d-c9fe1c13424b",
+      "name": "Responder Formulario Ticket"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Inserta RECHAZADO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Inserta RECIBIDO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recibe Formulario": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inserta RECIBIDO": {
+      "main": [
+        [
+          {
+            "node": "Respuesta Ticket Registrado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta Ticket Registrado": {
+      "main": [
+        [
+          {
+            "node": "Envia GMAILTiket Recibido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inserta RECHAZADO": {
+      "main": [
+        [
+          {
+            "node": "Respuesta Ticket Rechazado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formulario Ticket": {
+      "main": [
+        [
+          {
+            "node": "HTML Formulario Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML Formulario Ticket": {
+      "main": [
+        [
+          {
+            "node": "Responder Formulario Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "58fbf098-e6bf-4383-9ef0-1dd58f18ad78",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b02827de534b97c0f66b11997a66e662fec6fa056994bcca044c9990e9d512c1"
+  },
+  "id": "DwTRmmPARdGc654Q",
+  "tags": []
+}

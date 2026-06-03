@@ -1,0 +1,530 @@
+{
+  "name": "HelpDesk2 - Procesamiento corregido",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -3440,
+        -64
+      ],
+      "id": "73b9d636-2eb0-4f58-abd1-e17d5c6e6fd4",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM tickets WHERE estado = 'Pendiente' ORDER BY CASE prioridad WHEN 'Alta' THEN 1 WHEN 'Media' THEN 2 WHEN 'Baja' THEN 3 ELSE 4 END, fecha ASC LIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -3008,
+        -64
+      ],
+      "id": "9538bf27-da0f-420f-87ba-73e52918e90b",
+      "name": "Consulta Tickets pendientes",
+      "credentials": {
+        "mySql": {
+          "id": "zPDRKa5Ca9cnYQns",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "56c9760c-3f94-4d7f-91c7-33c5589c29f7",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2608,
+        -64
+      ],
+      "id": "c8ff145f-a349-46b7-9e28-e00b09718b89",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "sendTo": "carlosmorancac1113@gmail.com",
+        "subject": "=Nuevo ticket {{ $json.prioridad || \"Sin prioridad\" }} - {{ $json.nombre }}",
+        "message": "=<h2>Nuevo ticket pendiente</h2>\n<p>Se ha registrado un nuevo ticket en el sistema de soporte.</p>\n<p><strong>ID:</strong> {{ $json.id }}</p>\n<p><strong>Nombre:</strong> {{ $json.nombre }}</p>\n<p><strong>Correo:</strong> {{ $json.correo }}</p>\n<p><strong>Prioridad:</strong> {{ $json.prioridad || \"Sin prioridad\" }}</p>\n<p><strong>Problema:</strong> {{ $json.problema }}</p>\n<p><strong>Estado actual:</strong> {{ $json.estado }}</p>\n<p>Revisar el caso desde el dashboard.</p>\n<p>Sistema Help Desk</p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -2400,
+        -160
+      ],
+      "id": "c18512ef-fe96-4ab9-868e-3418d21f53a4",
+      "name": "Send a message",
+      "webhookId": "9d0cef33-99f0-4a9f-9bf2-babc6d64284e",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Ao4Z1roSryvBtszD",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, estado FROM tickets WHERE id = {{ $('Consulta Tickets pendientes').item.json.id }};",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -2192,
+        -160
+      ],
+      "id": "e6599fd9-72aa-49b0-9acc-f0e8d40afac9",
+      "name": "Mantener pendiente para dashboard",
+      "credentials": {
+        "mySql": {
+          "id": "zPDRKa5Ca9cnYQns",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "cerrar-ticket",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -3504,
+        240
+      ],
+      "id": "dc2dfea9-197f-4e40-8367-a454c38fea83",
+      "name": "Webhook cerrar",
+      "webhookId": "5c8282f4-dce2-4885-b725-9ba994dd3fe2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const q = $input.first().json.query || {};\nconst id = Number.parseInt(q.id, 10);\nconst solucion = String(q.solucion || '').trim();\n\nif (!Number.isInteger(id) || id <= 0) {\n  throw new Error('ID de ticket invalido');\n}\n\nif (solucion.length < 10) {\n  throw new Error('La descripcion de la solucion debe tener al menos 10 caracteres');\n}\n\nreturn [{\n  json: {\n    ticketId: id,\n    solucion,\n    solucionSql: solucion.replace(/'/g, \"''\")\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3280,
+        240
+      ],
+      "id": "12477dbf-0bfe-4d7b-92f9-2bfb24997c92",
+      "name": "Extraer query params"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE tickets SET estado = 'Terminado', solucion = '{{ $json.solucionSql }}', fecha_resolucion = NOW() WHERE id = {{ $json.ticketId }} AND estado IN ('En proceso', 'Pendiente');",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -3056,
+        240
+      ],
+      "id": "0296271b-c251-46b5-a818-d5778889357e",
+      "name": "SQL Actualizar ticket",
+      "credentials": {
+        "mySql": {
+          "id": "zPDRKa5Ca9cnYQns",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, nombre, correo, problema, prioridad, estado, solucion, fecha, fecha_resolucion FROM tickets WHERE id = {{ $('Extraer query params').item.json.ticketId }};",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -2864,
+        240
+      ],
+      "id": "a4bd9378-2b48-46b8-a130-c496e8a79c46",
+      "name": "SQL Datos ticket",
+      "credentials": {
+        "mySql": {
+          "id": "zPDRKa5Ca9cnYQns",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "mail-id",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "mail-nombre",
+              "name": "nombre",
+              "value": "={{ $json.nombre }}",
+              "type": "string"
+            },
+            {
+              "id": "mail-correo",
+              "name": "correo",
+              "value": "={{ $json.correo }}",
+              "type": "string"
+            },
+            {
+              "id": "mail-problema",
+              "name": "problema",
+              "value": "={{ $json.problema }}",
+              "type": "string"
+            },
+            {
+              "id": "mail-prioridad",
+              "name": "prioridad",
+              "value": "={{ $json.prioridad }}",
+              "type": "string"
+            },
+            {
+              "id": "mail-solucion",
+              "name": "solucion",
+              "value": "={{ $('Extraer query params').item.json.solucion }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {},
+        "includeOtherFields": false
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2656,
+        240
+      ],
+      "id": "9ffc1cb7-ceaf-413c-9883-10099cf73b7d",
+      "name": "Armar datos email"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.correo }}",
+        "subject": "=Ticket resuelto - Help Desk #{{ $json.id }}",
+        "message": "=<h2>Ticket resuelto</h2>\n<p>Hola <strong>{{ $json.nombre }}</strong>,</p>\n<p>Tu solicitud ha sido atendida correctamente.</p>\n<hr>\n<p><strong>Problema:</strong> {{ $json.problema }}</p>\n<p><strong>Prioridad:</strong> {{ $json.prioridad }}</p>\n<p><strong>Solucion aplicada:</strong> {{ $json.solucion }}</p>\n<hr>\n<p><strong>Estado final:</strong> Terminado</p>\n<p>Gracias por utilizar nuestro sistema de soporte.</p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -2464,
+        240
+      ],
+      "id": "c6258b29-3bcc-4797-8394-b62ccbd83938",
+      "name": "Email resolucion",
+      "webhookId": "ab6e1aca-ef30-414a-83c5-39a8192ec881",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Ao4Z1roSryvBtszD",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true, \"message\": \"Ticket terminado correctamente\" }",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -2256,
+        240
+      ],
+      "id": "7f5ac751-8615-4f7c-9145-c109f1f960a9",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "path": "tomar-ticket",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "9df42425-a674-41e0-95ab-77b8f0c328c2",
+      "name": "Webhook tomar ticket",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -760,
+        320
+      ],
+      "webhookId": "tomar-ticket-helpdesk"
+    },
+    {
+      "parameters": {
+        "jsCode": "const q = $input.first().json.query || {};\nconst id = Number.parseInt(q.id, 10);\n\nif (!Number.isInteger(id) || id <= 0) {\n  throw new Error('ID de ticket invalido');\n}\n\nreturn [{ json: { ticketId: id } }];"
+      },
+      "id": "a40e44ee-cc8d-4bf4-bb14-f6ac03cb5521",
+      "name": "Extraer ticket a tomar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -540,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE tickets SET estado = 'En proceso' WHERE id = {{ $json.ticketId }} AND estado = 'Pendiente';",
+        "options": {}
+      },
+      "id": "15f8459f-a1b6-4dc2-a372-0d797319d07f",
+      "name": "SQL Tomar ticket",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -320,
+        320
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "zPDRKa5Ca9cnYQns",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true, \"message\": \"Ticket pasado a En proceso\" }",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "ae8e86c7-e70b-44a2-8f60-55a6a98635c3",
+      "name": "Responder tomar ticket",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -100,
+        320
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Consulta Tickets pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consulta Tickets pendientes": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Mantener pendiente para dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook cerrar": {
+      "main": [
+        [
+          {
+            "node": "Extraer query params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer query params": {
+      "main": [
+        [
+          {
+            "node": "SQL Actualizar ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL Actualizar ticket": {
+      "main": [
+        [
+          {
+            "node": "SQL Datos ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL Datos ticket": {
+      "main": [
+        [
+          {
+            "node": "Armar datos email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar datos email": {
+      "main": [
+        [
+          {
+            "node": "Email resolucion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email resolucion": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook tomar ticket": {
+      "main": [
+        [
+          {
+            "node": "Extraer ticket a tomar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer ticket a tomar": {
+      "main": [
+        [
+          {
+            "node": "SQL Tomar ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL Tomar ticket": {
+      "main": [
+        [
+          {
+            "node": "Responder tomar ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "e37564f7-43a2-457b-a5e6-d6bb46213eb7",
+  "meta": {
+    "instanceId": "b02827de534b97c0f66b11997a66e662fec6fa056994bcca044c9990e9d512c1"
+  },
+  "id": "IbZWMu6tWwFnzt5B",
+  "tags": []
+}
